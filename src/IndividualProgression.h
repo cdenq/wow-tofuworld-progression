@@ -414,6 +414,18 @@ public:
     uint32 VanillaPvpKillRank1, VanillaPvpKillRank2, VanillaPvpKillRank3, VanillaPvpKillRank4, VanillaPvpKillRank5, VanillaPvpKillRank6, VanillaPvpKillRank7, VanillaPvpKillRank8, VanillaPvpKillRank9, VanillaPvpKillRank10, VanillaPvpKillRank11, VanillaPvpKillRank12, VanillaPvpKillRank13, VanillaPvpKillRank14;
     std::string excludedAccountsRegex, botAccountsRegex, sharedFactionIdsRegex;
 
+    // Tofu Worldview: per-character Progression mode.
+    // A character is a progression character only when it chose Progression at the challenge shrine (mod-challenge-modes stores the choice as a player setting).
+    // Every other character on a normal account is held at the last tier (PROGRESSION_WOTLK_TIER_5): no locks, no level caps, no gating.
+    std::string tofuModeSource, tofuInitSource;
+    uint32 tofuModeIndex, tofuLevelTokenItem;
+    bool tofuLoginEnabledMessage;
+    bool isProgressionCharacter(Player* player);
+    void ApplyTofuMode(Player* player);
+    void SetProgressionMode(Player* player, bool on);
+    void ResetBotToLastTier(Player* player);
+    bool isAtLevelCap(Player* player);
+
     // progression is derived from rewarded hidden quests (IDs 66000 + progression)
     uint8 GetPlayerProgressionFromQuests(Player* player) const;
 

@@ -28,16 +28,29 @@ public:
         if (!sIndividualProgression->isNormalAccount(player)) // bot or exluded account
         {
             if (sIndividualProgression->isBotAccount(player))
+            {
                 sIndividualProgression->UpdateRNDbotSpells(player); // give class spells to RNDbots that have been removed from trainers by IP.
-            
-            if (player->GetLevel() <= 60)
+
+                // Tofu: random and addclass bots play at the last tier, or at their group leader's tier inside a group.
+                if (Group* group = player->GetGroup())
+                    sIndividualProgression->SyncBotsProgressionToLeader(group);
+                else
+                    sIndividualProgression->ResetBotToLastTier(player);
+            }
+            else if (player->GetLevel() <= 60)
                 sIndividualProgression->ForceUpdateProgressionState(player, static_cast<ProgressionState>(0));
             else if ((player->GetLevel() > 60) && (player->GetLevel() <= 70))
                 sIndividualProgression->ForceUpdateProgressionState(player, static_cast<ProgressionState>(8));
             else
                 sIndividualProgression->ForceUpdateProgressionState(player, static_cast<ProgressionState>(13));
         }
-        else // normal account
+        else
+        {
+            // Tofu: a character that never chose Progression is held at the last tier; one that just chose it is reset to the start.
+            sIndividualProgression->ApplyTofuMode(player);
+        }
+
+        if (sIndividualProgression->isNormalAccount(player) && sIndividualProgression->isProgressionCharacter(player)) // normal account in Progression mode
         {
             if ((player->getRace() == RACE_DRAENEI || player->getRace() == RACE_BLOODELF) && sIndividualProgression->tbcRacesStartingProgression && !sIndividualProgression->hasPassedProgression(player, static_cast<ProgressionState>(sIndividualProgression->tbcRacesStartingProgression)))
             {
@@ -59,13 +72,29 @@ public:
 
         sIndividualProgression->CheckAdjustments(player);
 
-        if (sIndividualProgression->enabled)
+        // Tofu: the static "enabled" line is off by default; mod-individual-progression-announce prints the tier to progression characters instead.
+        if (sIndividualProgression->enabled && sIndividualProgression->tofuLoginEnabledMessage)
         {
             if (!player->GetSession())
                 return;
 
             ChatHandler(player->GetSession()).SendSysMessage("|cff00ff00Individual Progression: |cffccccccenabled|r");
         }
+    }
+
+    // Tofu: the level-up token (mod-item-level-up) calls GiveLevel directly, which would skip the level caps (60 before Naxxramas 40, 70 before Sunwell).
+    bool OnPlayerCanUseItem(Player* player, ItemTemplate const* proto, InventoryResult& result) override
+    {
+        if (!sIndividualProgression->enabled || !player || !proto || !sIndividualProgression->tofuLevelTokenItem || proto->ItemId != sIndividualProgression->tofuLevelTokenItem)
+            return true;
+
+        if (!sIndividualProgression->isAtLevelCap(player))
+            return true;
+
+        result = EQUIP_ERR_CANT_DO_RIGHT_NOW;
+        if (player->GetSession())
+            ChatHandler(player->GetSession()).SendSysMessage("You cannot level up past your progression level cap. Clear the next raid tier first.");
+        return false;
     }
 
     void OnPlayerEquip(Player* player, Item* /*it*/, uint8 /*bag*/, uint8 /*slot*/, bool /*update*/) override
@@ -1204,7 +1233,11 @@ public:
             return;
 
         if (sIndividualProgression->isNormalAccount(player))
-            sIndividualProgression->checkIPProgression(player);
+        {
+            sIndividualProgression->ApplyTofuMode(player);
+            if (sIndividualProgression->isProgressionCharacter(player))
+                sIndividualProgression->checkIPProgression(player);
+        }
 
         if (!sIndividualProgression->isBotAccount(player) || sIndividualProgression->BotAccountsEarnPvPTitles)
         {
@@ -1371,6 +1404,22 @@ public:
             return;
 
         sIndividualProgression->SyncBotsProgressionToLeader(group);
+    }
+
+    // Tofu: a bot that leaves a group goes back to the last tier.
+    void OnRemoveMember(Group* /*group*/, ObjectGuid guid, RemoveMethod /*method*/, ObjectGuid /*kicker*/, char const* /*reason*/) override
+    {
+        if (Player* removed = ObjectAccessor::FindPlayer(guid))
+            sIndividualProgression->ResetBotToLastTier(removed);
+    }
+
+    void OnDisband(Group* group) override
+    {
+        if (!group)
+            return;
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            if (Player* member = itr->GetSource())
+                sIndividualProgression->ResetBotToLastTier(member);
     }
 };
 

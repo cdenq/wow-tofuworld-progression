@@ -77,8 +77,7 @@ void IndividualProgression::ForceUpdateProgressionState(Player* player, Progress
     if (!player || !player->IsInWorld())
         return;
 
-    if (!newState)
-        return;
+    // Tofu: newState 0 (PROGRESSION_START) is valid; it removes every progression quest. Upstream returned early here, so a reset to the start was impossible.
 
     // remove all hidden progression quests first
     for (uint8 i = PROGRESSION_MOLTEN_CORE; i <= PROGRESSION_WOTLK_TIER_5; ++i)
@@ -476,9 +475,6 @@ void IndividualProgression::SyncBotsProgressionToLeader(Group* group)
 
     uint8 refProgress = GetPlayerProgressionFromQuests(leader);
 
-    if (!refProgress)
-        return;
-
     for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
     {
         Player* member = itr->GetSource();
@@ -487,6 +483,76 @@ void IndividualProgression::SyncBotsProgressionToLeader(Group* group)
 
         ForceUpdateProgressionState(member, static_cast<ProgressionState>(refProgress));
     }
+}
+
+// ---- Tofu Worldview: per-character Progression mode ----
+
+bool IndividualProgression::isProgressionCharacter(Player* player)
+{
+    if (!player || !isNormalAccount(player))
+        return false;
+    return player->GetPlayerSetting(tofuModeSource, tofuModeIndex).value != 0;
+}
+
+// Brings a normal-account character's tier in line with its mode. Free characters are held at the last tier.
+// A character that has just turned Progression on (the init flag is still 0) is reset to the start; the module's own starting rules then apply on top.
+void IndividualProgression::ApplyTofuMode(Player* player)
+{
+    if (!enabled || !player || !player->IsInWorld() || !isNormalAccount(player))
+        return;
+
+    bool const initialized = player->GetPlayerSetting(tofuInitSource, 0).value != 0;
+
+    if (!isProgressionCharacter(player))
+    {
+        if (initialized)
+            player->UpdatePlayerSetting(tofuInitSource, 0, 0);
+        if (GetPlayerProgressionFromQuests(player) < PROGRESSION_WOTLK_TIER_5)
+            ForceUpdateProgressionState(player, PROGRESSION_WOTLK_TIER_5);
+        return;
+    }
+
+    if (initialized)
+        return;
+
+    ForceUpdateProgressionState(player, PROGRESSION_START);
+    if (startingProgression)
+        UpdateProgressionState(player, static_cast<ProgressionState>(startingProgression));
+    player->UpdatePlayerSetting(tofuInitSource, 0, 1);
+    if (player->GetSession())
+        ChatHandler(player->GetSession()).SendSysMessage("|cff00ff00Progression mode is now active.|r The world opens up raid tier by raid tier, starting in Classic.");
+}
+
+// GM command and the challenge shrine: turn the mode on or off and apply it right away.
+void IndividualProgression::SetProgressionMode(Player* player, bool on)
+{
+    if (!player)
+        return;
+    player->UpdatePlayerSetting(tofuModeSource, tofuModeIndex, on ? 1 : 0);
+    ApplyTofuMode(player);
+}
+
+// Random and addclass bots outside a group play at the last tier.
+void IndividualProgression::ResetBotToLastTier(Player* player)
+{
+    if (!enabled || !player || !player->IsInWorld() || isNormalAccount(player) || isExcludedAccount(player))
+        return;
+    if (GetPlayerProgressionFromQuests(player) != PROGRESSION_WOTLK_TIER_5)
+        ForceUpdateProgressionState(player, PROGRESSION_WOTLK_TIER_5);
+}
+
+// The same tests the XP hook uses: level 60 before Naxxramas 40 is done, level 70 before Sunwell is done; bots at BotAccountsMaxLevel.
+bool IndividualProgression::isAtLevelCap(Player* player)
+{
+    if (!enabled || !player || isExcludedAccount(player))
+        return false;
+    if (isBotAccount(player))
+        return player->GetLevel() >= BotAccountsMaxLevel;
+    if (!hasPassedProgression(player, PROGRESSION_PRE_TBC) && player->GetLevel() >= 60)
+        return true;
+    if (!hasPassedProgression(player, PROGRESSION_TBC_TIER_5) && player->GetLevel() >= 70)
+        return true;
+    return false;
 }
 
 void IndividualProgression::checkIPPhasing(Player* player, uint32 newArea)
@@ -1150,6 +1216,11 @@ private:
         sIndividualProgression->LimitedSetRepCommand = sConfigMgr->GetOption<bool>("IndividualProgression.LimitedSetRepCommand", true);
         sIndividualProgression->sharedFactionIdsRegex = sConfigMgr->GetOption<std::string>("IndividualProgression.sharedFactionIdsRegex", "59|270|349|509|510|529|576|589|609|729|730|749|889|890|909");
         sIndividualProgression->BotAccountsMaxLevel = sConfigMgr->GetOption<uint8>("IndividualProgression.BotAccountsMaxLevel", 80);
+        sIndividualProgression->tofuModeSource = sConfigMgr->GetOption<std::string>("IndividualProgression.Tofu.ModeSettingSource", "mod-challenge-modes");
+        sIndividualProgression->tofuModeIndex = sConfigMgr->GetOption<uint32>("IndividualProgression.Tofu.ModeSettingIndex", 10);
+        sIndividualProgression->tofuInitSource = sConfigMgr->GetOption<std::string>("IndividualProgression.Tofu.InitSettingSource", "mod-tofu-progression");
+        sIndividualProgression->tofuLevelTokenItem = sConfigMgr->GetOption<uint32>("IndividualProgression.Tofu.LevelTokenItem", 701001);
+        sIndividualProgression->tofuLoginEnabledMessage = sConfigMgr->GetOption<bool>("IndividualProgression.Tofu.LoginEnabledMessage", false);
     }
 
     static void LoadXpValues()

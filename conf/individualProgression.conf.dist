@@ -525,3 +525,35 @@ IndividualProgression.LimitedSetRepCommand = 1
 #        Default:     "59|270|349|509|510|529|576|589|609|729|730|749|889|890|909"
 #
 IndividualProgression.sharedFactionIdsRegex = "59|270|349|509|510|529|576|589|609|729|730|749|889|890|909"
+
+###################################################################################################
+# Tofu Worldview: per-character Progression mode
+#
+# A character on a normal account is a progression character only when it chose Progression at
+# the challenge shrine (mod-challenge-modes). Every other character is held at the last tier: no
+# locks, no level caps, no gating. Random and addclass bots play at the last tier, or at their
+# group leader's tier inside a group, and return to the last tier when they leave the group.
+#
+# IndividualProgression.Tofu.ModeSettingSource / ModeSettingIndex
+#        Description: Player setting that holds the Progression choice (written by the shrine).
+#        Default:     "mod-challenge-modes" / 10
+#
+# IndividualProgression.Tofu.InitSettingSource
+#        Description: Player setting (index 0) recording that a progression character was reset
+#                     to the start after choosing the mode.
+#        Default:     "mod-tofu-progression"
+#
+# IndividualProgression.Tofu.LevelTokenItem
+#        Description: Item ID of mod-item-level-up's token. It cannot be used at a progression
+#                     level cap (60 before Naxxramas 40, 70 before Sunwell). 0 disables the check.
+#        Default:     701001
+#
+# IndividualProgression.Tofu.LoginEnabledMessage
+#        Description: Print the static "Individual Progression: enabled" line at every login.
+#        Default:     0 (mod-individual-progression-announce prints the tier to progression characters)
+#
+IndividualProgression.Tofu.ModeSettingSource = "mod-challenge-modes"
+IndividualProgression.Tofu.ModeSettingIndex = 10
+IndividualProgression.Tofu.InitSettingSource = "mod-tofu-progression"
+IndividualProgression.Tofu.LevelTokenItem = 701001
+IndividualProgression.Tofu.LoginEnabledMessage = 0

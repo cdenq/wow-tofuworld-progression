@@ -1,0 +1,1 @@
+-- Tofu Worldview: fixed values replacing mod-individual-progression's relative (non-re-runnable) updates, computed once from the module applied as written. Generated; do not edit by hand.

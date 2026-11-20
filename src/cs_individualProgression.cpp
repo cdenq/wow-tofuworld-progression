@@ -22,6 +22,7 @@ public:
             { "setrep", HandleSetRepIndividualProgressionCommand, SEC_GAMEMASTER,    Console::Yes },
             { "pvp",    HandlePVPIndividualProgressionCommand,    SEC_GAMEMASTER,    Console::Yes },
             { "attune", HandleAttuneIndividualProgressionCommand, SEC_GAMEMASTER,    Console::Yes },
+            { "mode",   HandleModeIndividualProgressionCommand,   SEC_GAMEMASTER,    Console::Yes },
         };
 
         static ChatCommandTable commandTable =
@@ -63,6 +64,44 @@ public:
             if (target->HasAchieved(achievementId))
                 sIndividualProgression->RemovePlayerAchievement(playerGUID, achievementId);
         }
+    }
+
+    // Tofu: .ip mode [name] [progression|free] shows or sets a character's Progression mode. Setting it applies at once: free goes to the last tier, progression resets to the start.
+    static bool HandleModeIndividualProgressionCommand(ChatHandler* handler, Optional<PlayerIdentifier> player, Optional<std::string> mode)
+    {
+        if (!player)
+            player = PlayerIdentifier::FromTargetOrSelf(handler);
+
+        if (!player)
+        {
+            handler->SendSysMessage("Player not found.");
+            return false;
+        }
+
+        std::string playername = player->GetName();
+        Player* target = player->GetConnectedPlayer();
+        if (!target)
+        {
+            handler->PSendSysMessage("Player |cff00ffff{}|r is not online.", playername);
+            return false;
+        }
+
+        if (mode)
+        {
+            if (*mode == "progression")
+                sIndividualProgression->SetProgressionMode(target, true);
+            else if (*mode == "free")
+                sIndividualProgression->SetProgressionMode(target, false);
+            else
+            {
+                handler->SendSysMessage("Usage: .ip mode [name] [progression|free]");
+                return false;
+            }
+        }
+
+        bool const progression = sIndividualProgression->isProgressionCharacter(target);
+        handler->PSendSysMessage("|cff00ffff{}|r: mode |cff00ffff{}|r, progression level |cff00ffff{}|r", playername, progression ? "progression" : "free", sIndividualProgression->GetPlayerProgressionFromQuests(target));
+        return true;
     }
 
     static bool HandleGetIndividualProgressionCommand(ChatHandler* handler, Optional<PlayerIdentifier> player)
